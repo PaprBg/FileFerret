@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fileferret"
+version = "0.1.0"
+description = "Ask a question, get the exact file, page, and line on your PC."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "anthropic",
+    "pypdf",
+    "python-docx",
+    "python-dotenv",
+]
+
+[project.optional-dependencies]
+openai = ["openai"]
+gemini = ["openai"]
+dev = ["pytest"]
+
+[project.scripts]
+fileferret = "fileferret.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
