@@ -1,76 +1,108 @@
 # FileFerret
 
-Ask a plain-English question; FileFerret searches the files on your PC and answers with the exact file, page, and line.
+Ask a question about the files on your PC. Get the answer with the exact file, page and line.
 
-It works the way Claude Code searches a repo: a model is handed a few read-only tools
-and runs a search → read → refine loop until it can answer:
+FileFerret hands a language model a few read-only tools and lets it search your files the way
+Claude Code explores a codebase: search, read what it finds, refine, and repeat until it can
+answer. There's no index to build and no embeddings. Every citation in the answer is checked
+against the real file before it's shown.
 
-- `grep_text` — search inside files; several folders in one call (`paths`), `files_only` to just list matching files
-- `find_files` — search file names only
-- `preview_files` — skim the opening lines of many files, for "find the story / the recipe" questions where the word isn't in the file
-- `read_file`, `file_info`, `list_dir`
+It reads `.txt`, `.md` and `.pdf` files (PDFs with a text layer) and can find any file by name.
 
-Every citation in the answer is checked against the real file before it's shown.
+## How it works
 
-Searches inside `.txt`, `.md` and `.pdf` files; other files can be found by name. DOCX support is next.
-
-### PDFs
-
-- The PDF's text layer is read, page by page; citations include the page: `report.pdf:p3:L12`.
-- Scanned pages and drawings (pages that are just images) have no text layer and can't be read yet.
-- Extracting PDF text is slow (~25 ms per page), so it's cached in
-  `%LOCALAPPDATA%\FileFerret\cache` (or `FILEFERRET_CACHE_DIR`). The first search of a big PDF
-  folder takes a while (`-v` shows progress); later searches are fast. A PDF is re-read
-  automatically when it changes.
-- The cache holds plain-text copies of PDFs you've searched. `fileferret cache` shows its size;
-  `fileferret cache --clear` deletes it.
-
-## Install
-
-```
-pip install -e .
+```mermaid
+flowchart LR
+  Q[Your question] --> M[Model]
+  M -- calls a tool --> T["Read-only tools<br/>grep · find · preview · read"]
+  T -- results --> M
+  T --- F[("Your files<br/>.txt .md .pdf")]
+  M -- final answer --> C[Citation check]
+  C --> A[Answer + verified sources]
 ```
 
-Copy `.env.example` to `.env` and fill in the API key for the provider you use:
-`ANTHROPIC_API_KEY` (Claude), `OPENAI_API_KEY` (ChatGPT) or `GEMINI_API_KEY` (Gemini). `.env` is git-ignored.
-For OpenAI or Gemini models also run `pip install -e ".[openai]"`. Local Ollama models need no key.
+The model decides every search; the code only runs the tools and checks the citations.
+Details in [docs/architecture.md](docs/architecture.md).
 
-## Usage
+## Quick start (free, with Gemini)
 
-```
-fileferret ask "find me a file named trial on my desktop"
-fileferret ask "Where did I write down the router password?" --root C:\Users\me\Documents
-```
+Needs Python 3.10+ and a free Gemini API key from [Google AI Studio](https://aistudio.google.com).
+Commands below are for Windows PowerShell.
 
-Add `-v` to see each tool call as it happens, and `--max-steps N` to change how many model calls it may make (default 20).
-
-### Which folders it searches
-
-- **Allowed folders** are searched without asking: every `--root` you pass (repeat it for several),
-  else `FILEFERRET_ROOTS` in `.env` (separate several with `;`), else your user folder.
-  `AppData`, `Program Files` and other system folders are always skipped.
-- The model is told where your Desktop, Documents and Downloads folders are, so "on my desktop" works.
-- If the model wants to look **outside** the allowed folders, you're asked once per folder:
-  `Allow for this run? [y/N]`. Saying no tells the model it was denied. When nobody can answer
-  (piped or scripted runs), outside access is always denied.
-- With a cloud model, the contents of files it reads are sent to that provider.
-
-## Layout
-
-- `src/fileferret/cli.py` — command-line entry point
-- `src/fileferret/agent/` — the search → read → refine loop, prompts, answer/citation types
-- `src/fileferret/tools/` — read-only tools exposed to the model, one per file
-- `src/fileferret/extractors/` — turn txt/md/pdf/docx into text with page/line positions
-- `src/fileferret/llm/` — model backends behind one interface (Claude, ChatGPT, local Ollama)
-- `tests/` — pytest tests
-
-## Choosing a model
-
-```
-fileferret ask "..." --provider anthropic --model claude-opus-5-5   # default
-fileferret ask "..." --provider openai --model gpt-5                # ChatGPT models
-fileferret ask "..." --provider gemini --model gemini-3.6-flash     # Gemini (free tier available)
-fileferret ask "..." --provider ollama --model llama3.1             # local, files stay on your PC
+```powershell
+git clone https://github.com/PaprBg/FileFerret.git
+cd FileFerret
+python -m venv venv
+venv\Scripts\Activate
+pip install -e ".[gemini]"
+copy .env.example .env
 ```
 
-Or set `FILEFERRET_PROVIDER` / `FILEFERRET_MODEL` in your environment.
+In `.env`, set:
+
+```
+FILEFERRET_PROVIDER=gemini
+GEMINI_API_KEY=your-key-here
+```
+
+Then ask:
+
+```powershell
+fileferret ask "what is my wifi password?" -v
+```
+
+The answer ends with a Sources list: each cited location (like `report.pdf:p3:L12`) and the
+quoted line from the real file.
+
+The free tier allows about 20 requests a day per model, and a question uses 3–7, so expect a
+few questions a day. Snippets of the files it reads are sent to Google. Other providers,
+including local models, are covered in [docs/models.md](docs/models.md).
+
+## Everyday use
+
+| Command | What it does |
+|---|---|
+| `fileferret ask "..."` | Ask a question. Searches your user folder by default. |
+| `-v` | Show each tool call as it happens. |
+| `--root PATH` | Search this folder instead; repeat for several. |
+| `--provider NAME` / `--model NAME` | Pick the model, e.g. `--model gemini-3.5-flash`. |
+| `--max-steps N` | Limit how many model calls one question may use (default 20). |
+| `fileferret cache` / `cache --clear` | Show or delete the cache of extracted PDF text. |
+
+If the model wants to look outside the allowed folders, it asks you first:
+`Allow for this run? [y/N]`. See [docs/folders-and-privacy.md](docs/folders-and-privacy.md).
+
+## Limitations
+
+- **Answers depend on the model.** Small models often pick the wrong tool or give up early;
+  `gemini-3.5-flash` handles questions that `gemini-3.5-flash-lite` fails.
+- **"Verified" means the cited lines exist,** not that they support the answer. Read the quotes
+  in the Sources list.
+- **Scanned PDFs and drawings can't be read.** Only the PDF text layer is used.
+- **Keyword search only.** A file that says "burnout" is found for "tired at work" only if the
+  model thinks of that word.
+- **Your files leave your PC with cloud models,** and the PDF cache keeps plain-text copies on
+  disk ([docs/pdfs.md](docs/pdfs.md)).
+
+## Roadmap
+
+- Word, Excel and PowerPoint files
+- Scanned PDFs and drawings: local OCR, plus on-demand vision for specific pages
+- A chat mode that remembers the conversation
+- Search by meaning as an extra tool
+
+## Docs
+
+- [Models and providers](docs/models.md): Claude, ChatGPT, Gemini, Ollama; keys, quotas, which models work well
+- [Folders and privacy](docs/folders-and-privacy.md): what it may search, approval prompts, what is sent where
+- [PDFs](docs/pdfs.md): page citations, scanned pages, the text cache
+- [Architecture](docs/architecture.md): the loop, the tools, citation checking, adding tools or providers
+
+## Development
+
+```powershell
+pip install -e ".[dev]"
+pytest
+```
+
+Tests use a scripted fake model, so they need no API key and cost nothing.
