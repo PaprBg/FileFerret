@@ -164,5 +164,3 @@ If the model wants to look outside the allowed folders, it asks you first:
 pip install -e ".[dev]"
 pytest
 ```
-
-Tests use a scripted fake model, so they need no API key and cost nothing.
