@@ -24,39 +24,99 @@ flowchart LR
 The model decides every search; the code only runs the tools and checks the citations.
 Details in [docs/architecture.md](docs/architecture.md).
 
-## Quick start (free, with Gemini)
+## Quick start
 
-Needs Python 3.10+ and a free Gemini API key from [Google AI Studio](https://aistudio.google.com).
-Commands below are for Windows PowerShell.
+Needs Python 3.10+. Commands are for Windows PowerShell.
+
+### 1. Install
 
 ```powershell
 git clone https://github.com/PaprBg/FileFerret.git
 cd FileFerret
 python -m venv venv
 venv\Scripts\Activate
-pip install -e ".[gemini]"
 copy .env.example .env
 ```
 
-In `.env`, set:
+### 2. Choose a model
+
+Pick one of these. Each needs one install command and two lines in `.env`.
+
+| Option | Cost | Your files go to | Quality |
+|---|---|---|---|
+| [Gemini](#gemini-free-tier) | Free tier | Google | Good with `gemini-3.5-flash` or better |
+| [Claude](#claude) | Paid | Anthropic | Best at choosing searches |
+| [ChatGPT](#chatgpt) | Paid | OpenAI | Good |
+| [Ollama (local)](#ollama-local) | Free | Stays on your PC | Depends on the model and your RAM |
+
+#### Gemini (free tier)
+
+Get a key at [Google AI Studio](https://aistudio.google.com).
+
+```powershell
+pip install -e ".[gemini]"
+```
 
 ```
 FILEFERRET_PROVIDER=gemini
 GEMINI_API_KEY=your-key-here
 ```
 
-Then ask:
+About 20 requests a day per model, and a question uses 3–7. Free-tier data may be used by Google
+to improve its products.
+
+#### Claude
+
+Get a key at [console.anthropic.com](https://console.anthropic.com).
 
 ```powershell
-fileferret ask "what is my wifi password?" -v
+pip install -e .
+```
+
+```
+FILEFERRET_PROVIDER=anthropic
+ANTHROPIC_API_KEY=your-key-here
+```
+
+#### ChatGPT
+
+Get a key at [platform.openai.com](https://platform.openai.com).
+
+```powershell
+pip install -e ".[openai]"
+```
+
+```
+FILEFERRET_PROVIDER=openai
+OPENAI_API_KEY=your-key-here
+```
+
+#### Ollama (local)
+
+Install [Ollama](https://ollama.com), then download a model that supports tool calling
+(`llama3.1` needs roughly 5 GB of free memory):
+
+```powershell
+ollama pull llama3.1
+pip install -e .
+```
+
+```
+FILEFERRET_PROVIDER=ollama
+FILEFERRET_MODEL=llama3.1
+```
+
+To use a different model than the default, set `FILEFERRET_MODEL` for any option. More in
+[docs/models.md](docs/models.md).
+
+### 3. Ask
+
+```powershell
+fileferret ask "which PDF on my desktop mentions a project deadline, and what is the date?" -v
 ```
 
 The answer ends with a Sources list: each cited location (like `report.pdf:p3:L12`) and the
 quoted line from the real file.
-
-The free tier allows about 20 requests a day per model, and a question uses 3–7, so expect a
-few questions a day. Snippets of the files it reads are sent to Google. Other providers,
-including local models, are covered in [docs/models.md](docs/models.md).
 
 ## Everyday use
 
