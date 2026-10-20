@@ -1,8 +1,14 @@
 """List the files and folders directly inside a folder."""
 
-from pathlib import Path
+from __future__ import annotations
 
-from fileferret.tools.common import ToolError, describe_size, resolve_path
+from pathlib import Path
+from typing import TYPE_CHECKING
+
+from fileferret.tools.common import PATH_HELP, ToolError, describe_size
+
+if TYPE_CHECKING:
+    from fileferret.workspace import Workspace
 
 MAX_ENTRIES = 200
 
@@ -12,14 +18,14 @@ SCHEMA = {
     "input_schema": {
         "type": "object",
         "properties": {
-            "path": {"type": "string", "description": "Folder to list. Default: search root."},
+            "path": {"type": "string", "description": f"Folder to list. {PATH_HELP}"},
         },
     },
 }
 
 
-def run(root: Path, path: str = ".") -> str:
-    folder = resolve_path(root, path)
+def run(ws: Workspace, path: str = ".") -> str:
+    folder = ws.resolve(path)
     if not folder.is_dir():
         raise ToolError(f"{path} is not a folder")
     try:
